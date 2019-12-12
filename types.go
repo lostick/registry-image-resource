@@ -32,6 +32,7 @@ type Source struct {
 	AwsSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
 	AwsRegion          string `json:"aws_region,omitempty"`
 	AwsRoleArn         string `json:"aws_role_arn,omitempty"`
+	AwsEcrRegistryId   string `json:"aws_ecr_registry_id,omitempty"`
 
 	Debug bool `json:"debug,omitempty"`
 }
@@ -148,17 +149,24 @@ func (source *Source) MetadataWithAdditionalTags(tags []string) []MetadataField 
 
 func (source *Source) AuthenticateToECR() bool {
 	logrus.Warnln("ECR integration is experimental and untested")
-	mySession := session.Must(session.NewSession(&aws.Config{
-		Region:      aws.String(source.AwsRegion),
-		Credentials: credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, ""),
-	}))
+
+	cfg := &aws.Config{Region: aws.String(source.AwsRegion)}
+	if source.AwsAccessKeyId != "" && source.AwsSecretAccessKey != "" {
+		cfg.Credentials = credentials.NewStaticCredentials(source.AwsAccessKeyId, source.AwsSecretAccessKey, "")
+	}
+	mySession := session.Must(session.NewSession(cfg))
+
 	client := ecr.New(mySession)
 	// If a role arn has been supplied, then assume role and get a new session
 	if source.AwsRoleArn != "" {
 		creds := stscreds.NewCredentials(mySession, source.AwsRoleArn)
 		client = ecr.New(mySession, &aws.Config{Credentials: creds})
 	}
-	input := &ecr.GetAuthorizationTokenInput{}
+	var RegistryIds []*string
+	if source.AwsEcrRegistryId != "" {
+		RegistryIds = append(RegistryIds, aws.String(source.AwsEcrRegistryId))
+	}
+	input := &ecr.GetAuthorizationTokenInput{RegistryIds: RegistryIds}
 	result, err := client.GetAuthorizationToken(input)
 	if err != nil {
 		logrus.Errorf("failed to authenticate to ECR: %s", err)

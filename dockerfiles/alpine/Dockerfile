@@ -10,7 +10,7 @@ RUN set -e; for pkg in $(go list ./...); do \
 		go test -o "/tests/$(basename $pkg).test" -c $pkg; \
 	done
 
-FROM alpine:edge AS resource
+FROM alpine:latest AS resource
 RUN apk add --no-cache bash tzdata ca-certificates unzip zip gzip tar
 COPY --from=builder assets/ /opt/resource/
 RUN chmod +x /opt/resource/*
